@@ -8,32 +8,14 @@ import os
 import threading
 
 all_to_die = False  # global
-players = [Player("blue", "leader"), Player("red", "leader"), Player("blue", "guesser"), Player("red", "guesser")]
-set_teammates(players[0], players[2])  # blues
-set_teammates(players[1], players[3])  # reds
-
 IP = '0.0.0.0'
 PORT = 6171
 
 
 # --- Classes ----------------------------------------------------------------------
 class Player:
-    def __init__(self, team, role):
-        self.team = ""
-        self.role = ""
-        self.ip = ""
-        self.teammate = None
-        self.socket = None
-
-    def send_clue(self, clue):
-        msg = 'CLUE' + '~' + clue
-        self.teammate.socket.send(msg.encode())
-        return msg
-
-
-def set_teammates(player1: Player, player2: Player):
-    player1.teammate = player2
-    player2.teammate = [player1]
+    def __init__(self):
+        pass
 
 
 class Card:
@@ -50,8 +32,6 @@ class Card:
 class Grid:
     def __init__(self):
         # 5x5
-        self.role = ""
-        self.team = ""
         self.grid = [Card(), Card(), Card(), Card(), Card(),
                      Card(), Card(), Card(), Card(), Card(),
                      Card(), Card(), Card(), Card(), Card(),
@@ -105,105 +85,15 @@ def get_words_list():
     return words_list
 
 
-def recv_guess(player: Player):
-    try:
-        msg = player.socket.recv(1024).decode()
-        parts = msg.split('~')
-        if parts[0] == "GUES":
-            guess = parts[1]
-            return guess
-        else:
-            return "ERRR~200~wrong type of message"
-    except:
-        return "ERRR~100" # means there was an error in reciving the msg
-
-
-def check_guess(guess):
-    pass
-
-
-def protocol_build_reply(request):
-    """
-    Application Business Logic
-    function despatcher ! for each code will get to some function that handle specific request
-    Handle client request and prepare the reply info
-    string:return: reply
-    """
-    reply = ""
-    request_code = request.decode().split('~')[0]
-    request = request.decode()
-    if request_code == 'CLUE':
-        reply = 'SCSR'
-        get_screenshot(request_code[6:])
-    elif request_code == 'RAND':
-        reply = '' + '~' + get_random()
-    elif request_code[0] == 'EXIT':
-        reply = 'EXTR'
-    else:
-        reply = 'ERRR~002~code not supported' +" - "+ request_code[:5]
-        fields = ''
-    return reply.encode()
-
-
-def handle_request(request):
-    """
-    Handle client request
-    tuple :return: return message to send to client and bool if to close the client socket
-    """
-    try:
-        request_code = request[:5]
-        to_send = protocol_build_reply(request)
-        if request_code == b'EXIT':
-            return to_send, True
-    except Exception as err:
-        print(traceback.format_exc())
-        to_send =  b'ERRR~001~General error'
-    return to_send, False
-
-
 def handle_client():
     pass
 
 
+def handle_request():
+
+
 def main(self):
-    global all_to_die
-    global players
-    """
-    main server loop
-    1. accept tcp connection
-    2. create thread for each connected new client
-    3. wait for all threads
-    4. every X clients limit will exit
-    """
-    threads = []
-    srv_sock = socket.socket()
-
-    srv_sock.bind(('0.0.0.0', port))
-
-    srv_sock.listen(4)
-
-    # next line release the port
-    srv_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-    i = 0
-    while True:
-        print('\nMain thread: before accepting ...')
-        cli_sock, addr = srv_sock.accept()
-        players[i].socket = cli_sock
-        t = threading.Thread(target=handle_client, args=(cli_sock, str(i), addr))
-        t.start()
-        i += 1
-        threads.append(t)
-        if i > 100000000:  # for tests change it to 4
-            print('\nMain thread: going down for maintenance')
-            break
-
-    all_to_die = True
-    print('Main thread: waiting to all clients to die')
-    for t in threads:
-        t.join()
-    srv_sock.close()
-    print('Bye ..')
+    s = socket.socket()
 
 
 if __name__ == '__main__':
