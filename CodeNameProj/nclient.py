@@ -79,6 +79,7 @@ root = tk.Tk()
 ip = '127.0.0.1'
 sock = socket.socket()
 clue = ""
+clue_label = None
 connected = False
 board = Board()
 grid_buttons = []
@@ -107,45 +108,50 @@ def create_root_leader(team, role):
     global root
     global btn
     global grid_buttons
-    root.title('team: ' + team + 'role: ' + role)
+    global clue_label
+    global clue
+    root.title('TEAM: ' + team + '  ROLE: ' + role)
     root.config(bg='dark slate gray')
 
     l = tk.Label(root, text="Enter Clue:")
     l.grid(row=0, column=0, columnspan=1)
-
     l.config(font=("Courier", 12))
+
     enter_clue = tk.Entry(root, width=22)
     enter_clue.grid(row=0, column=1, columnspan=3)
     enter_clue.config(font=("Courier", 14))
 
-    btn = tk.Button(root, height=1, width=12, text="Enter", state=tk.DISABLED, command=send_clue)
+    btn = tk.Button(root, height=1, width=12, text="Enter", state=tk.DISABLED, command=lambda r=r, c=c: send_clue(enter_clue))
     btn.grid(row=0, column=4, columnspan=1)
+
     for r in range(0, 5):
         for c in range(0, 5):
             b = tk.Button(root, text=board.board[5 * r + c].word, bg=board.board[5 * r + c].type, borderwidth=1,
-                          height=5, width=10, state=tk.DISABLED)
+                          height=5, width=10)
             b.grid(row=r + 1, column=c, padx=2, pady=2)
             grid_buttons.append(b)
-
 
 
 def create_root_guesser(team, role):
     global root
     global grid_buttons
-    root.title('team: ' + team + ' role: ' + role)
+    global clue_label
+    root.title('TEAM: ' + team + '  ROLE: ' + role)
     root.config(bg='dark slate gray')
 
-    l = tk.Label(root, text='Clue: ' + clue)
-    l.grid(row=0, column=0, columnspan=5)
-    l.config(font=("Courier", 14))
+    clue_label = tk.Label(root, text='Clue: ' + clue)
+    clue_label.grid(row=0, column=0, columnspan=5)
+    clue_label.config(font=("Courier", 14))
+
+    btn = tk.Button(root, height=1, width=12, text="End", state=tk.DISABLED, command=lambda r=r, c=c: end_turn)
+    btn.grid(row=0, column=4, columnspan=1)
 
     for r in range(0, 5):
         for c in range(0, 5):
             b = tk.Button(root, text=board.board[5 * r + c].word, bg='snow', borderwidth=1, height=5, width=10,
-                          command=lambda r=r, c=c: reveal_card(r, c))
+                          command=lambda r=r, c=c: make_guess(r, c))
             b.grid(row=r + 1, column=c, padx=2, pady=2)
             grid_buttons.append(b)
-
 
 
 def reveal_card(row, col):
@@ -153,9 +159,24 @@ def reveal_card(row, col):
     global root
     global board
     global grid_buttons
-    guess = board.board[5 * row + col].word
+    guess = board.board[5 * int(row) + int(col)].word
     print("row:", row, "col:", col, "--> text: ", guess)
-    grid_buttons[5 * row + col].config(bg=board.board[5 * row + col].type)
+    grid_buttons[5 * int(row) + int(col)].config(
+        bg=board.board[5 * int(row) + int(col)].type, state=tk.DISABLED)
+
+
+def make_guess(row, col):
+    global sock
+    msg = "GUES" + '~' + str(row) + '~' + str(col)
+    print(msg)
+    sock.send(msg.encode())
+
+
+def end_turn():
+    global sock
+    global btn
+    sock.send("ENDT".encode())
+    disable_entry(btn)
 
 
 def color_greed(grid):
@@ -166,29 +187,53 @@ def color_greed(grid):
     root.mainloop()
 
 
-def send_guess(row, col, board):
-    pass
-
-
 def send_clue(enter_clue):
     global clue
     global sock
-    clue = enter_clue.get()
+    global btn
+    try:
+        clue = enter_clue.get()
+        print("clue: ", clue)
+        msg = "CLUE" + '~' + clue
+        sock.send(msg.encode())
+        disable_entry(btn)
+
+    except Exception as err:
+        print('Server replay bad format (clue)s : ', err)
+
+
+def reveal_clue():
+    global clue
+    global clue_label
+    global btn
     print("clue: ", clue)
-    msg = "CLUE" + '~' + clue
-    sock.send(msg.encode())
+    clue_label.config(text="CLUE: " + clue)
+    able_entry(btn)
+
+
+def remove_clue():
+    global clue
+    global clue_label
+    clue_label.config(text="CLUE: ")
 
 
 def make_turn_leader():
-    pass
+    global btn
+    able_entry(btn)
 
 
-def make_turn_guesser(clue):
-    pass
+def make_turn_guesser():
+    global clue
+    able_entry(btn)
+    reveal_clue()
 
 
 def make_turn():
-    pass
+    global board
+    if board.role == "leader":
+        make_turn_leader()
+    if board.role == "guesser":
+        make_turn_guesser()
 
 
 def able_entry(button):
@@ -235,6 +280,21 @@ def accept_grid(reply):
     sock.send("HALO".encode())
 
 
+def win():
+    global sock
+    global root
+    showinfo(title="END", message="YOU WON!!!!!!!!!!!!")
+    sock.close()
+    root.destroy()
+
+
+def lose():
+    global sock
+    global root
+    showinfo(title="END", message="YOU LOST (loser) :(")
+    sock.close()
+    root.destroy()
+
 
 def end_process():
     global sock
@@ -274,6 +334,8 @@ def protocol_parse_reply(reply):
                 to_show = 'ROLE ' + fields[1]
             elif code == 'TURN':
                 to_show = 'TURN'
+            elif code == 'REVL':
+                to_show = 'REVL'
             elif code == 'ERRR':
                 to_show = 'Server return an error: ' + fields[1] + ' ' + fields[2]
             elif code == 'EXIT':
@@ -296,6 +358,7 @@ def handle_reply(reply):
         else:
             reply = reply.decode()
             print("reply:", reply)
+            fields = []
             if '~' in reply:
                 fields = reply.split('~')
             code = reply[:4]
@@ -304,13 +367,15 @@ def handle_reply(reply):
             elif code == 'ROLE':
                 accept_role(reply)
             elif code == 'REVL':
-                pass
+                print("reviling")
+                reveal_card(fields[1], fields[2])
             elif code == 'TURN':  # !! finish
+                print("YOUR TURN")
                 make_turn()
             elif code == 'TWIN':
-                pass
+                win()
             elif code == 'LOSE':
-                pass
+                lose()
             elif code == 'EXIT':
                 print("Exiting")
                 end_process()
@@ -340,15 +405,16 @@ def callback_root():
 
     try:
         message = the_queue.get(block=False)
-    except queue.Empty:
+    except queue.Empty or the_queue.get(block=False) is None:
         # let's try again later
         root.after(100, callback_root)
         return
 
-    print('callback_root got', message[:4].decode())
-    if connected:
+    if connected and message is not None:
         # we're not done yet, let's do something with the message and
         # come back later
+        print(message)
+        print('callback_root got', message[:4].decode())
         print("MSG -->", message[:4].decode())
         print("callback")
         handle_reply(message)
@@ -438,34 +504,6 @@ def main():
         print("starting callback...")
         root.after(2000, callback_root)
         start_root()
-        # connected = True
-        # to_send = "HALO"
-        # while connected:
-        #     try:
-        #         print("hello")
-        #
-        #         print("to send...", to_send)
-        #         sock.send(to_send.encode())
-        #         print("receving...")
-        #         byte_data = sock.recv(1024)
-        #         print(byte_data[:4].decode())
-        #         if byte_data == b'':
-        #             print('Seems server disconnected abnormal')
-        #             break
-        #         handle_reply(byte_data)
-        #
-        #         if not connected:
-        #             print('Will exit ...')
-        #             connected = False
-        #             break
-        #     except socket.error as err:
-        #         print(f'Got socket error: {err}')
-        #         break
-        #     except Exception as err:
-        #         print(f'General error: {err}')
-        #         print(traceback.format_exc())
-        #         break
-
 
     except:
         print(f'Error while trying to connect.  Check ip or port -- {ip}:{port}')

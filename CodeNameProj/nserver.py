@@ -52,9 +52,10 @@ class Player:
         st = "team: " + self.team + ", role: " + self.role + ", ip: " + self.ip
         return st
 
-    def send_clue(self, clue):
+    def send_clue(self, clue, tid):
+        print("clue --> ", clue)
         msg = 'CLUE' + '~' + clue
-        self.teammate.socket.send(msg.encode())
+        sockets[tid].send(msg.encode())
         return msg
 
 
@@ -78,6 +79,8 @@ class Board:
     def __init__(self):
         # 5x5
         self.team = ""
+        self.blue = 8
+        self.red = 8
         self.role = ""
         self.board = [Card(), Card(), Card(), Card(), Card(),
                       Card(), Card(), Card(), Card(), Card(),
@@ -123,12 +126,13 @@ class Board:
 
 
 all_to_die = False  # global
-players = [Player("blue", "leader"), Player("red", "leader"), Player("blue", "guesser"), Player("red", "guesser")]
+players = [Player("blue", "leader"), Player("blue", "guesser"), Player("red", "leader"), Player("red", "guesser")]
 for p in players:
     print(p)
 sockets = []
 set_teammates(players[0], players[2])  # blues
 set_teammates(players[1], players[3])  # reds
+turn = 0
 
 IP = '0.0.0.0'
 port = 2134
@@ -136,16 +140,30 @@ board = Board()
 board.set_board()
 
 
-def recv_guess(player: Player):
+def recv_guess(player: Player, msg):
     try:
-        msg = player.socket.recv(1024).decode()
         parts = msg.split('~')
-        if parts[0] == "GUES":
-            guess = parts[1]
-            return guess
+        if parts[0] == "REVL":
+            row = parts[1]
+            col = parts[2]
+            color = board.board[int(row) * 5 + int(col)].type
+            print("COLOR", color)
+            spy = ""
+            if color == "sky blue":
+                board.blue -= 1
+                print("BLUE", str(board.blue))
+            if color == "firebrick2":
+                board.red -= 1
+                print("RED", str(board.red))
+            if color == "AntiqueWhite2":
+                print("villager")
+            if color == "purple":
+                spy = player.team
+            return row, col ,spy
         else:
             return "ERRR~200~wrong type of message"
-    except:
+    except Exception as err:
+        print("ERROR -->", err)
         return "ERRR~100" # means there was an error in reciving the msg
 
 
@@ -158,8 +176,30 @@ def send_all(data):
             print("sent", i, data)
 
 
-def check_guess(guess):
-    pass
+def end_game(spy):
+    global all_to_die
+    global board
+    i = 0
+    if board.blue == 0 or spy == "red":
+        print("BLUE WIN")
+        for pl in sockets:
+            if players[i].team == "blue":
+                pl.send("TWIN".encode())
+            if players[i].team == "red":
+                pl.send("LOSE".encode())
+            i+=1
+        end_all()
+        all_to_die = True
+    elif board.red == 0 or spy == "blue":
+        print("RED WIN")
+        for pl in sockets:
+            if players[i].team == "red":
+                pl.send("TWIN".encode())
+            if players[i].team == "blue":
+                pl.send("LOSE".encode())
+        i += 1
+        end_all()
+        all_to_die = True
 
 
 def send_team(sock, tid):
@@ -167,6 +207,14 @@ def send_team(sock, tid):
     sock.send(to_send.encode())
     data = sock.recv(1024).decode()
     return data
+
+
+def send_all_card(row, col, tid):
+    to_send = 'REVL' + '~' + row + '~' + col
+    row, col, spy = recv_guess(players[tid], to_send)
+    send_all(to_send)
+    end_game(spy)
+    return to_send
 
 
 def send_role(sock, tid):
@@ -204,7 +252,7 @@ def protocol_build_reply(request):
     elif request_code[0] == 'EXIT':
         reply = 'EXIT'
     else:
-        reply = 'ERRR~002~code not supported' +" - "+ request_code[:5]
+        reply = 'ERRR~002~code not supported' + " - " + request_code[:5]
         fields = ''
     return reply.encode()
 
@@ -226,6 +274,7 @@ def handle_request(request):
 
 
 def handle_client(sock, tid, addr):
+    global turn
     finish = False
     print(f'New Client number {tid} from {addr}')
     players[tid].socket = sock
@@ -252,11 +301,25 @@ def handle_client(sock, tid, addr):
             print('will close due to main server issue')
             break
         try:
+            if turn % 4 == tid:
+                print("turn2", turn)
+                sockets[turn % 4].send("TURN".encode())
+                print("turn", turn)
             data = sock.recv(1024).decode()
+            fields = []
+            if '~' in data:
+                fields = data.split('~')
+            print("data -->", data)
             print(f"client {tid}: {data}")
             to_send = ""
             if data[:4] == "HALO":
                 print("done")
+            elif data[:4] == "GUES":
+                data = send_all_card(fields[1], fields[2], tid)
+            elif data[:4] == "CLUE":
+                players[tid].send_clue(fields[1], tid)
+            elif data[:4] == "ENDT":
+                turn += 1
             elif data[:4] == "EXIT":
                 data = end_all()
             else:
@@ -267,7 +330,7 @@ def handle_client(sock, tid, addr):
             break
         except Exception as err:
             print(f'General Error %s exit client loop: {err}', addr)
-            print(traceback.format_exc())
+            # print(traceback.format_exc())
             break
 
 
