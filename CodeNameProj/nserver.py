@@ -135,7 +135,7 @@ set_teammates(players[1], players[3])  # reds
 turn = 0
 
 IP = '0.0.0.0'
-port = 2134
+port = 1053
 board = Board()
 board.set_board()
 

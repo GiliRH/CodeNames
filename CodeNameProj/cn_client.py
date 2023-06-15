@@ -122,7 +122,7 @@ def create_root_leader(team, role):
     enter_clue.config(font=("Courier", 14))
 
     btn = tk.Button(root, height=1, width=12, text="Enter", state=tk.DISABLED,
-                    command=lambda team=team: send_clue(enter_clue))
+                    command=lambda r=r, c=c: send_clue(enter_clue))
     btn.grid(row=0, column=4, columnspan=1)
 
     for r in range(0, 5):
@@ -145,7 +145,7 @@ def create_root_guesser(team, role):
     clue_label.grid(row=0, column=0, columnspan=5)
     clue_label.config(font=("Courier", 14))
 
-    btn = tk.Button(root, height=1, width=12, text="End", state=tk.DISABLED, command=lambda team=team: end_turn)
+    btn = tk.Button(root, height=1, width=12, text="End", state=tk.DISABLED, command=lambda r=r, c=c: end_turn)
     btn.grid(row=0, column=4, columnspan=1)
 
     for r in range(0, 5):
@@ -204,7 +204,8 @@ def send_clue(enter_clue):
         print('Server replay bad format (clue)s : ', err)
 
 
-def reveal_clue(clue):
+def reveal_clue():
+    global clue
     global clue_label
     global btn
     print("clue: ", clue)
@@ -220,12 +221,13 @@ def remove_clue():
 
 def make_turn_leader():
     global btn
-    btn.config(state=tk.NORMAL)
+    able_entry(btn)
 
 
 def make_turn_guesser():
     global clue
-    btn.config(state=tk.NORMAL)
+    able_entry(btn)
+    reveal_clue()
 
 
 def make_turn():
@@ -369,8 +371,6 @@ def handle_reply(reply):
             elif code == 'REVL':
                 print("reviling")
                 reveal_card(fields[1], fields[2])
-            elif code == 'CLUE':
-                reveal_clue(fields[1])
             elif code == 'TURN':  # !! finish
                 print("YOUR TURN")
                 make_turn()
@@ -507,8 +507,8 @@ def main():
         root.after(2000, callback_root)
         start_root()
 
-    except Exception as err:
-        print(f'Error while trying to connect.  Check ip or port -- {ip}:{port}; ', err)
+    except:
+        print(f'Error while trying to connect.  Check ip or port -- {ip}:{port}')
 
     print('Bye')
     try:
