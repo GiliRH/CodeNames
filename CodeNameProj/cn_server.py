@@ -240,6 +240,13 @@ def end_all():
     return "End all processes"
 
 
+def next_turn(tid):
+    global turn
+    if turn % 4 == tid:
+        print("turn", turn % 4)
+        sockets[tid].send("TURN".encode())
+
+
 def protocol_build_reply(request):
     """
     Application Business Logic
@@ -304,8 +311,7 @@ def handle_client(sock, tid, addr):
             print('will close due to main server issue')
             break
         try:
-            if turn % 4 == tid:
-                sockets[turn % 4].send("TURN".encode())
+            next_turn(tid)
             data = sock.recv(1024).decode()
             fields = []
             if '~' in data:
@@ -320,7 +326,8 @@ def handle_client(sock, tid, addr):
             elif data[:4] == "CLUE":
                 players[tid].send_clue(fields[1], tid)
             elif data[:4] == "ENDT":
-                turn += 1
+                turn+=1
+                next_turn(turn % 4)
             elif data[:4] == "EXIT":
                 data = end_all()
             else:

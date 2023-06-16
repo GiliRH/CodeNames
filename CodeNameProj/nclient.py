@@ -145,7 +145,7 @@ def create_root_guesser(team, role):
     clue_label.grid(row=0, column=0, columnspan=5)
     clue_label.config(font=("Courier", 14))
 
-    btn = tk.Button(root, height=1, width=12, text="End", state=tk.DISABLED, command=lambda team=team: end_turn)
+    btn = tk.Button(root, height=1, width=12, text="End", state=tk.DISABLED, command=lambda team=team: end_turn())
     btn.grid(row=0, column=4, columnspan=1)
 
     for r in range(0, 5):
@@ -177,6 +177,7 @@ def make_guess(row, col):
 def end_turn():
     global sock
     global btn
+    print("end_turn")
     sock.send("ENDT".encode())
     disable_entry(btn)
 
@@ -219,12 +220,10 @@ def remove_clue():
 
 
 def make_turn_leader():
-    global btn
     btn.config(state=tk.NORMAL)
 
 
 def make_turn_guesser():
-    global clue
     btn.config(state=tk.NORMAL)
 
 
@@ -446,11 +445,14 @@ def thread_target():
                 break
             print("recived -->", byte_data[:4].decode())
             the_queue.put(byte_data)
+            print("end loop")
 
             if not connected:
                 print('Will exit ...')
                 connected = False
                 break
+            else:
+                continue
         except socket.error as err:
             print(f'Got socket error: {err}')
             break
